@@ -1,0 +1,124 @@
+---
+description: 
+globs: *.py
+alwaysApply: false
+---
+# Python Development
+Use this guide as the non-negotiable contract for any Python project you touch.
+
+## **Key Principles**
+
+| Principle                             | Python-specific Notes                                                                             |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Write tests first                     | Use `pytest` or `pytest-bdd` to express scenarios before implementation.                          |
+| Test **behavior**, not implementation | Treat modules as black boxes; assert on externally observable outcomes.                           |
+| No “dynamic” escape hatches           | Avoid `typing.Any`, unchecked casts, or `# type: ignore` pragmas.                                 |
+| Immutable data only                   | Prefer `@dataclass(frozen=True)`, `NamedTuple`, or `typing.TypedDict` + frozen wrappers.          |
+| Small, pure functions                 | Minimize side-effects; lean on composition over shared state.                                     |
+| **Static type checking on**           | Run `mypy --strict` (or `pyright --strict`) in CI; no warnings allowed.                           |
+| Re-use **real domain types** in tests | Import the same dataclasses / pydantic models your app uses—never re-declare shapes in test code. |
+
+## **Preferred Tools**
+
+* **Language:** Python 3.12+ (PEP 695 type-parameter syntax)
+* **Testing:** `pytest` ± `pytest-bdd` or `behave`
+* **Property Testing:** `hypothesis`
+* **Mocking / Stubbing:** `pytest-mock`, `responses`, **MSW-py** (Mock Service Worker analogue for HTTPX / aiohttp)
+* **Lint / Static Analysis:** `ruff`, `mypy --strict`, `pyright`
+* **State Management:** Immutable data structures (`attrs`, `frozen dataclasses`, `immutables.Map`) and pure functions
+
+## Testing
+**Test Layout & Naming**
+
+```
+project_root/
+  src/
+    payments/
+      processor.py              # public API
+      _validator.py             # implementation detail (prefixed underscore)
+  tests/
+    test_payments.py            # covers validation *through* processor
+    conftest.py                 # shared fixtures & factories
+```
+
+* Tests live under `tests/`, mirroring *features* rather than files.
+* Private helpers (e.g., `_validator.py`) never appear in imports inside `tests/`.
+
+**Test Data Pattern**
+
+> Use dataclass factories with optional overrides—type-safe, immutable, and composable.
+
+```python
+# src/payments/models.py
+from __future__ import annotations
+from dataclasses import dataclass
+from typing import Literal
+
+Currency = Literal["USD", "EUR", "GBP"]
+
+@dataclass(frozen=True)
+class Address:
+    street: str
+    city: str
+    house_number: str
+
+@dataclass(frozen=True)
+class PostPaymentRequest:
+    card_account_id: str
+    amount: int  # cents
+    currency: Currency
+    source: Literal["Web", "Mobile"]
+    last_name: str
+    date_of_birth: str  # ISO8601 YYYY-MM-DD
+    cvv: str
+    token: str
+    address: Address
+    brand: Literal["Visa", "Mastercard", "Amex"]
+```
+
+```python
+# tests/factories.py
+from datetime import date
+from payments.models import Address, PostPaymentRequest
+
+def make_address(**overrides) -> Address:
+    defaults = dict(
+        street="Test Address Line 1",
+        city="Testville",
+        house_number="123",
+    )
+    return Address(**{**defaults, **overrides})
+
+def make_payment_request(**overrides) -> PostPaymentRequest:
+    defaults = dict(
+        card_account_id="1234_5678_9012_3456",
+        amount=10_00,
+        currency="USD",
+        source="Web",
+        last_name="Doe",
+        date_of_birth=str(date(1980, 1, 1)),
+        cvv="123",
+        token="tok_test",
+        address=make_address(),
+        brand="Visa",
+    )
+    return PostPaymentRequest(**{**defaults, **overrides})
+```
+
+## Factory Guidelines
+
+1. Return **complete, valid** objects with sensible defaults.
+2. Accept arbitrary keyword overrides—type-checked by `mypy`.
+3. Extract nested factories (`make_address`) as domains grow.
+4. Compose factories rather than duplicating literals.
+5. For extremely complex graphs, graduate to the **Test Data Builder** pattern (chained mutator methods returning new frozen instances).
+
+## Continuous Integration Checklist
+
+1. `ruff check .`
+2. `mypy --strict src tests`
+3. `pytest --cov=src --cov-fail-under=100`
+4. `python -m pip check` (dependency health)
+5. `pre-commit run --all-files` (formatters, linters)
+
+All stages must pass **before** merging to `main`.

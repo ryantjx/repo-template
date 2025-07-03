@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Search for a [GUIDELINES.md](mdc:GUIDELINES.md). This document will contain the rules that you should follow for the development of the repository. If it is not filled in, prompt the user to fill in the file before continuing with the development of the project. Be strict with the scope of the project outline in [GUIDELINES.md](mdc:GUIDELINES.md). During development, if the user wants to expand or reduce the scope of the guidelines, change the [GUIDELINES.md](mdc:GUIDELINES.md) document as well.
